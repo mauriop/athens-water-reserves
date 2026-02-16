@@ -14,8 +14,29 @@ const getVal = (item, keys) => {
 };
 
 // In-memory cache to store results by yearsBack
-// In-memory cache to store results by yearsBack
 const CACHE = new Map();
+
+const fetchYearData = async (yearOffset, anchorDate, onComplete) => {
+  // Determine the anchor date for this year offset using date-fns
+  const currentAnchorDate = subYears(anchorDate, yearOffset);
+
+  // Format for API: DD-MM-YYYY
+  const apiDateString = format(currentAnchorDate, "dd-MM-yyyy");
+  const url = `${API_BASE}/Year/${apiDateString}`;
+
+  try {
+    const response = await fetch(url);
+    if (response.ok) {
+      const json = await response.json();
+      return Array.isArray(json) ? json : [json];
+    }
+  } catch (err) {
+    console.warn(`Failed to fetch data for year offset ${yearOffset}`, err);
+  } finally {
+    if (onComplete) onComplete();
+  }
+  return [];
+};
 
 export const fetchReservoirData = async (
   yearsBack,
@@ -36,30 +57,14 @@ export const fetchReservoirData = async (
 
   // Create an array of promises for concurrent fetching
   let completedRequests = 0;
-  const fetchPromises = Array.from({ length: yearsBack }, async (_, i) => {
-    // Determine the anchor date for this year offset using date-fns
-    const currentAnchorDate = subYears(endObj, i);
-
-    // Format for API: DD-MM-YYYY
-    const apiDateString = format(currentAnchorDate, "dd-MM-yyyy");
-    const url = `${API_BASE}/Year/${apiDateString}`;
-
-    try {
-      const response = await fetch(url);
-      if (response.ok) {
-        const json = await response.json();
-        return Array.isArray(json) ? json : [json];
-      }
-    } catch (err) {
-      console.warn(`Failed to fetch data for year offset ${i}`, err);
-    } finally {
+  const fetchPromises = Array.from({ length: yearsBack }, (_, i) => 
+    fetchYearData(i, endObj, () => {
       completedRequests++;
       if (onProgress) {
         onProgress(Math.round((completedRequests / totalRequests) * 100));
       }
-    }
-    return [];
-  });
+    })
+  );
 
   const results = await Promise.all(fetchPromises);
   results.forEach((yearData) => allResults.push(...yearData));
@@ -152,22 +157,15 @@ export const fetchReservoirData = async (
   ];
 
   // 5. Prepare Final Data
-  const finalData = uniqueWeeklyData.map((item) => {
-    const mVal = item.Mornos;
-    const eVal = item.Eyinos;
-    const yVal = item.Yliko;
-    const maVal = item.Marathonas;
-
-    return {
+  const finalData = uniqueWeeklyData.map((item) => 
+    ({
       timestamp: item.timestamp,
-      Mornos: mVal,
-      Eyinos: eVal,
-      Yliko: yVal,
-      Marathonas: maVal,
-      // Total for tooltip
-      total: mVal + eVal + yVal + maVal,
-    };
-  });
+      Mornos: item.Mornos,
+      Eyinos: item.Eyinos,
+      Yliko: item.Yliko,
+      Marathonas: item.Marathonas,
+      total: item.Mornos + item.Eyinos + item.Yliko + item.Marathonas,
+    }));
 
   if (finalData.length === 0) {
     throw new Error("No data returned from API. Please try again later.");

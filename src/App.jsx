@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { format, subYears } from "date-fns";
+import { format, subYears, subMonths } from "date-fns";
 import { fetchReservoirData } from "./api";
 import Header from "./components/Header";
 import DateRangeSelector from "./components/DateRangeSelector";
@@ -18,7 +18,7 @@ const App = () => {
   const [progress, setProgress] = useState(0);
 
   // Configuration State
-  const [yearsBack, setYearsBack] = useState(10); // Default to 1 year back
+  const [timeRange, setTimeRange] = useState({ value: 10, unit: "years" }); 
 
   // Visibility State
   const [visibleReservoirs, setVisibleReservoirs] = useState({
@@ -67,18 +67,23 @@ const App = () => {
 
   // Trigger initial fetch only on mount
   useEffect(() => {
-    console.log("before fetchData, yearsBack", yearsBack);
     fetchData();
-  }, [yearsBack]);
+  }, []);
 
   // --- Derived Data for Display ---
   const displayedData = useMemo(() => {
     if (!allData.length) return [];
 
-    // Filter data based on selected yearsBack
-    const cutoffDate = subYears(new Date(), yearsBack);
+    // Filter data based on selected timeRange
+    let cutoffDate;
+    if (timeRange.unit === "months") {
+      cutoffDate = subMonths(new Date(), timeRange.value);
+    } else {
+      cutoffDate = subYears(new Date(), timeRange.value);
+    }
+    
     return allData.filter((item) => new Date(item.timestamp) >= cutoffDate);
-  }, [allData, yearsBack]);
+  }, [allData, timeRange]);
 
   // --- Render Helpers ---
 
@@ -105,7 +110,7 @@ const App = () => {
           progress={progress}
           onRefresh={() => fetchData(true)}
         />
-        <DateRangeSelector yearsBack={yearsBack} setYearsBack={setYearsBack} />
+        <DateRangeSelector timeRange={timeRange} setTimeRange={setTimeRange} />
       </header>
 
       <main className="max-w-6xl mx-auto space-y-6">
